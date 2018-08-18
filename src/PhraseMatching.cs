@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using F23.StringSimilarity;
 using LemmaSharp;
+using Syn.WordNet;
 
-namespace DayforceAssistant.Infrastructure.NLP
+namespace Puzzles_NetCore
 {
-    public class PhraseMatcher
+    public class PhraseMatching
     {
         /// <summary>
         ///  Given a list of phrases, return the best matching phrase based on an input phrase. 
@@ -16,7 +18,7 @@ namespace DayforceAssistant.Infrastructure.NLP
         /// <param name="inputPhrase"></param>
         /// <param name="phrases"></param>
         /// <returns></returns>
-        public string[] GetMatchingPhrase(string inputPhrase, List<string> phrases)
+        public static List<string> GetMatchingPhrase(string inputPhrase, List<string> phrases)
         {
             if (phrases?.Count == 0)
                 return null;
@@ -24,7 +26,7 @@ namespace DayforceAssistant.Infrastructure.NLP
             // Lemmatize and remove stop-words from phrases
             var lmtz = new LemmatizerPrebuiltCompact(LanguagePrebuilt.English);
             var lemmaListPhrases = Lemmatize(phrases, lmtz);
-            for(var i=0; i< lemmaListPhrases.Count; i++)
+            for (var i = 0; i < lemmaListPhrases.Count; i++)
             {
                 var phrase = lemmaListPhrases[i];
                 lemmaListPhrases[i] = RemoveStopWords(phrase);
@@ -35,10 +37,14 @@ namespace DayforceAssistant.Infrastructure.NLP
             lemmaInputPhrase = RemoveStopWords(lemmaInputPhrase);
             lemmaInputPhrase = SubstituteWords(lemmaInputPhrase);   // "your" => "my"
 
-            // LCS distance
-            var bestMatchIndex = LongestCommonSubsequence(lemmaInputPhrase, lemmaListPhrases);
+            // find the best match
+            var matches = BestSetMatch(lemmaInputPhrase, lemmaListPhrases);
+            var matchedPhrases = matches.Count == 0 ? new List<string> { "" } : matches.Take(2).Select(idx => phrases[idx]).ToList();
 
-            return new string[] { phrases[bestMatchIndex] };
+            // paraphrase
+            //var paraphrasedResult = Paraphrase(matchedPhrases[0]);
+
+            return matchedPhrases;
         }
 
         /// <summary>
@@ -47,7 +53,7 @@ namespace DayforceAssistant.Infrastructure.NLP
         /// </summary>
         /// <param name="inputPhrase"></param>
         /// <returns></returns>
-        private string SubstituteWords(string inputPhrase)
+        private static string SubstituteWords(string inputPhrase)
         {
             var pattern = @"\byour\b";
             var regex = new Regex(pattern);
@@ -66,7 +72,7 @@ namespace DayforceAssistant.Infrastructure.NLP
         /// <param name="lstPhrases"></param>
         /// <param name="lmtz"></param>
         /// <returns></returns>
-        private List<string> Lemmatize(List<string> lstPhrases, ILemmatizer lmtz)
+        private static List<string> Lemmatize(List<string> lstPhrases, ILemmatizer lmtz)
         {
             var lemmaListPhrases = new List<string[]>();
 
@@ -89,32 +95,29 @@ namespace DayforceAssistant.Infrastructure.NLP
         }
 
         /// <summary>
-        /// Finds the maximum LCS of an input string against a list of strings.
+        /// Finds the bext match by using set difference
         /// </summary>
         /// <param name="lemmaInputPhrase"></param>
         /// <param name="lemmaListPhrases"></param>
         /// <returns></returns>
-        private int LongestCommonSubsequence(string lemmaInputPhrase, IList<string> lemmaListPhrases)
+        private static List<int> BestSetMatch(string lemmaInputPhrase, IList<string> lemmaListPhrases)
         {
-            var maxLCS = 0.0;
-            int bestMatchIndex = 0;
-            var lemmaInputPhraseOrdered = string.Join(" ", lemmaInputPhrase.Split(new char[] { ' ' }).OrderBy(x => x).ToList());
+            var matches = new SortedDictionary<int, int>();
+
+            var inputSet = lemmaInputPhrase.Split(" ").ToHashSet();
 
             for (var i = 0; i < lemmaListPhrases.Count; i++)
             {
-                // order the list first before joining into a single string 'cos LCS depends on the order of characters
-                var lemmaListPhrasesOrdered = lemmaListPhrases[i].Split(" ").OrderBy(x => x).ToList();
+                var vocabSet = lemmaListPhrases[i].Split(" ").ToHashSet();
+                var difference = inputSet.Except(vocabSet);
+                var count = difference.Count();
 
-                var lemmaDicPhrase = string.Join(" ", lemmaListPhrasesOrdered);
-                var currentLCS = LCS(lemmaInputPhraseOrdered, lemmaDicPhrase);
-                if (currentLCS > maxLCS)
-                {
-                    maxLCS = currentLCS;
-                    bestMatchIndex = i;
-                }
+                // we need to make sure at least 2 words from the inputPhrase matches with any test phrase
+                if (count <= (inputSet.Count - 2))
+                    matches[count] = i;
             }
 
-            return bestMatchIndex;
+            return matches.Values.ToList();
         }
 
         /// <summary>
@@ -122,32 +125,15 @@ namespace DayforceAssistant.Infrastructure.NLP
         /// </summary>
         /// <param name="inputPhrase"></param>
         /// <returns></returns>
-        private string RemoveStopWords(string inputPhrase)
+        private static string RemoveStopWords(string inputPhrase)
         {
-            var stopWords = new[] { "yes", "no", "are", "on", "at", "with", "from", "to", "am", "is", "for", "a", "of", "any", "it", "what", "when", "who", "where", "be" };
+            var stopWords = new[] { "yes", "no", "are", "on", "at", "with", "from", "to", "am", "is", "for", "a", "of", "any", "it", "what", "when", "who", "where", "be", "the", ",", ".", "?" };
             var result = string.Join(" ", inputPhrase.Split(' ').Where(wrd => !stopWords.Contains(wrd)));
 
             return result;
         }
 
-        /// <summary>
-        /// Returns the length of the Longest Common Subsequence between two strings
-        /// </summary>
-        /// <param name="s1"></param>
-        /// <param name="s2"></param>
-        /// <returns></returns>
-        private double LCS(string s1, string s2)
-        {
-            //var lev = new Levenshtein();
-            //var jw = new JaroWinkler();
-            var lcs = new LongestCommonSubsequence();
-            var len = lcs.Length(s1, s2);
-
-            //return lcs.Distance(s1, s2);
-            return len;
-        }
-
-        private string[] LemmatizePhrase(ILemmatizer lmtz, string phrase)
+        private static string[] LemmatizePhrase(ILemmatizer lmtz, string phrase)
         {
             var words = phrase.Split(
                 new char[] { ' ', ',', '.', ')', '(' }, StringSplitOptions.RemoveEmptyEntries);
@@ -160,11 +146,48 @@ namespace DayforceAssistant.Infrastructure.NLP
             return words;
         }
 
-        private string LemmatizeWord(ILemmatizer lmtz, string word)
+        private static string LemmatizeWord(ILemmatizer lmtz, string word)
         {
             string wordLower = word.ToLower();
             string lemma = lmtz.Lemmatize(wordLower);
             return lemma;
+        }
+
+        private static void LoadWordnet(WordNetEngine wordNet)
+        {
+            var directory = Path.Combine(Directory.GetCurrentDirectory(), "wordnet");
+            wordNet.LoadFromDirectory(directory);
+        }
+
+        /// <summary>
+        /// This function uses Google Cloud Translate to paraphrase an english sentence,
+        /// first by translating it into 2 foreign languages and then back to english.
+        /// Normally a seq2seq text generator should be used here.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        private static string Paraphrase(string input)
+        {
+            var rnd = new Random();
+            var languages = new List<string> { "fr", "de", "es" };
+            var index = rnd.Next(0, 3);
+
+            // 1st translation to a foreign language
+            var str = Translation.Translate(input, languages[index]);
+
+            // fisher-yates
+            var lastPicked = languages[index];
+            languages[index] = "es";
+            languages[2] = lastPicked;
+
+            // 2nd translation to another foreign language
+            index = rnd.Next(0, 2);
+            str = Translation.Translate(str, languages[index]);
+
+            // final translation back to english
+            str = Translation.Translate(str, "en");
+
+            return str;
         }
     }
 }
