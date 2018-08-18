@@ -15,9 +15,7 @@ namespace Puzzles_NetCore
         /// <summary>
         ///  Given a list of phrases, return the best matching phrase based on an input phrase. 
         /// </summary>
-        /// <param name="inputPhrase"></param>
-        /// <param name="phrases"></param>
-        /// <returns></returns>
+        /// <returns>List of 2 best matches</returns>
         public static List<string> GetMatchingPhrase(string inputPhrase, List<string> phrases)
         {
             if (phrases?.Count == 0)
@@ -51,8 +49,6 @@ namespace Puzzles_NetCore
         /// Since this algorithm will be used to find best match of a response for a given query, 
         /// the response string should contain certain transposed matching words, for eg, "my" for "your" 
         /// </summary>
-        /// <param name="inputPhrase"></param>
-        /// <returns></returns>
         private static string SubstituteWords(string inputPhrase)
         {
             var pattern = @"\byour\b";
@@ -69,9 +65,6 @@ namespace Puzzles_NetCore
         /// <summary>
         /// Lemmatize the phrases.
         /// </summary>
-        /// <param name="lstPhrases"></param>
-        /// <param name="lmtz"></param>
-        /// <returns></returns>
         private static List<string> Lemmatize(List<string> lstPhrases, ILemmatizer lmtz)
         {
             var lemmaListPhrases = new List<string[]>();
@@ -95,11 +88,9 @@ namespace Puzzles_NetCore
         }
 
         /// <summary>
-        /// Finds the bext match by using set difference
+        /// Finds the best match by using set difference of words between inputPhrase and
+        /// each of the listedPhrases.
         /// </summary>
-        /// <param name="lemmaInputPhrase"></param>
-        /// <param name="lemmaListPhrases"></param>
-        /// <returns></returns>
         private static List<int> BestSetMatch(string lemmaInputPhrase, IList<string> lemmaListPhrases)
         {
             var matches = new SortedDictionary<int, int>();
@@ -123,8 +114,6 @@ namespace Puzzles_NetCore
         /// <summary>
         /// Remove stop-words such as "what", "from", "to", etc to increase the probability of matches.
         /// </summary>
-        /// <param name="inputPhrase"></param>
-        /// <returns></returns>
         private static string RemoveStopWords(string inputPhrase)
         {
             var stopWords = new[] { "yes", "no", "are", "on", "at", "with", "from", "to", "am", "is", "for", "a", "of", "any", "it", "what", "when", "who", "where", "be", "the", ",", ".", "?" };
@@ -164,8 +153,6 @@ namespace Puzzles_NetCore
         /// first by translating it into 2 foreign languages and then back to english.
         /// Normally a seq2seq text generator should be used here.
         /// </summary>
-        /// <param name="input"></param>
-        /// <returns></returns>
         private static string Paraphrase(string input)
         {
             var rnd = new Random();
